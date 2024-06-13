@@ -1,71 +1,79 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using System.IO;
 
 namespace dBase3
 {
     class GestorBasesDeDatos
     {
         private static string tablaActual = null;
+
         public static void Ejecutar()
         {
-            Console.WriteLine("1 - Abrir tabla existente.");
-            Console.WriteLine("2 - Crear una nueva tabla.");                   
-            Console.WriteLine("3 - Añadir datos a la tabla actual.");                    
-            Console.WriteLine("4 - Visualizar la tabla actual.");                    
-            Console.WriteLine("0 - Salir.");                    
+            while (true)
+            {
+                Console.WriteLine("1 - Abrir tabla existente.");
+                Console.WriteLine("2 - Crear una nueva tabla.");
+                Console.WriteLine("3 - Añadir datos a la tabla actual.");
+                Console.WriteLine("4 - Visualizar la tabla actual.");
+                Console.WriteLine("5 - Prueba de consola mejorada.");
+                Console.WriteLine("0 - Salir.");
 
-            ElegirOpcionMenu();
-            Console.Clear();
+                ElegirOpcionMenu();
+                Console.Clear();
+            }
         }
 
         public static void ElegirOpcionMenu()
         {
-            string opcion;
-            do 
+            string opcion = ConsolaMejorada.PedirString("Elige una opción: ");
+            switch (opcion)
             {
-                opcion = ConsolaMejorada.PedirString("Elige una opción: ");
-                switch (opcion)
-                {
-                    case "1":
-                        AbrirTablaExistente();
-                        break;
+                case "1":
+                    AbrirTablaExistente();
+                    break;
 
-                    case "2":
-                        CreadorDeTablas crearTabla = new CreadorDeTablas();
-                        crearTabla.EjecutarCreadorTablas();
-                        break; 
+                case "2":
+                    CreadorDeTablas crearTabla = new CreadorDeTablas();
+                    crearTabla.EjecutarCreadorTablas();
+                    break;
 
-                    case "3":
+                case "3":
+                    if (tablaActual == null)
+                    {
+                        Console.WriteLine("Primero debe abrir una tabla existente.");
+                    }
+                    else
+                    {
                         InsertadorEnTablas insertarTabla = new InsertadorEnTablas();
                         insertarTabla.EjecutarInsertarTablas();
-                        break;
-                        
-                    case "4":
-                        if (tablaActual == null)
-                        {
-                            Console.WriteLine("Primero debe abrir una tabla existente.");
-                        }
-                        else
-                        {
-                            MostrarDatosTablas mostrar = new MostrarDatosTablas();
-                            mostrar.CargarTabla(tablaActual);
-                        }
+                    }
+                    break;
 
-                        break;
+                case "4":
+                    if (tablaActual == null)
+                    {
+                        Console.WriteLine("Primero debe abrir una tabla existente.");
+                    }
+                    else
+                    {
+                        MostrarDatosTabla(tablaActual);
+                    }
+                    break;
 
-                    case "0":
-                        Console.WriteLine("Saliendo del programa.");
-                        Environment.Exit(0);
-                        break;
+                case "5":
+                    ConsolaMejorada.ProbarMetodos();
+                    break;
 
-                        default:
-                        Console.WriteLine("Opción no válida, inténtelo de nuevo.");
-                        break;
-                }
-            } while (opcion != "0");
+                case "0":
+                    Console.WriteLine("Saliendo del programa.");
+                    Environment.Exit(0);
+                    break;
+
+                default:
+                    Console.WriteLine("Opción no válida, inténtelo de nuevo.");
+                    break;
+            }
         }
 
         private static void AbrirTablaExistente()
@@ -73,6 +81,7 @@ namespace dBase3
             tablaActual = ConsolaMejorada.PedirString("Nombre de la tabla que vas a abrir: ");
             MostrarDatosTabla(tablaActual);
         }
+
         private static void MostrarDatosTabla(string nombreTabla)
         {
             string dataFile = $"{nombreTabla}.data";
@@ -84,39 +93,67 @@ namespace dBase3
                 return;
             }
 
-            StreamReader sr = null;
-            try
+            List<string> campos = new List<string>();
+            List<int> longitudes = new List<int>();
+            CargarCamposYLongitudes(headerFile, campos, longitudes);
+
+            string[] lineas = File.ReadAllLines(dataFile);
+            int cantidadDeRegistros = Convert.ToInt32(lineas[0]);
+
+            MostrarRegistrosConScroll(lineas, campos, longitudes, cantidadDeRegistros);
+        }
+
+        private static void CargarCamposYLongitudes(string headerFile, List<string> campos, List<int> longitudes)
+        {
+            using (StreamReader sr = new StreamReader(headerFile))
             {
-                sr = new StreamReader(headerFile);               
                 int cantidadDeCampos = Convert.ToInt32(sr.ReadLine());
                 for (int i = 0; i < cantidadDeCampos; i++)
                 {
                     string[] partes = sr.ReadLine().Split('-');
-                    Console.Write(partes[0].PadRight(Convert.ToInt32(partes[2]) + 1));
+                    campos.Add(partes[0]);
+                    longitudes.Add(Convert.ToInt32(partes[2]));
                 }
-                Console.WriteLine();
+            }
+        }
 
-                sr = new StreamReader(dataFile);               
-                string linea;
-                int contador = 1;
-                while ((linea = sr.ReadLine()) != null)
+        private static void MostrarRegistrosConScroll(string[] lineas, List<string> campos, List<int> longitudes, int cantidadDeRegistros)
+        {
+            int posicionActual = 0;
+            bool continuar = true;
+
+            while (continuar)
+            {
+                Console.Clear();
+                MostrarRegistro(lineas, campos, longitudes, posicionActual);
+
+                ConsoleKeyInfo key = Console.ReadKey();
+                switch (key.Key)
                 {
-                    Console.WriteLine("{0}: {1}", contador, linea);
-                    contador++;
-                }          
+                    case ConsoleKey.Escape:
+                        continuar = false;
+                        break;
+                    case ConsoleKey.UpArrow:
+                        if (posicionActual > 0) posicionActual--;
+                        break;
+                    case ConsoleKey.DownArrow:
+                        if (posicionActual < cantidadDeRegistros - 1) posicionActual++;
+                        break;
+                }
             }
-            catch(FileLoadException ex)
+        }
+
+        private static void MostrarRegistro(string[] lineas, List<string> campos, List<int> longitudes, int posicionActual)
+        {
+            string linea = "";
+            for (int campoActual = 0; campoActual < campos.Count; campoActual++)
             {
-                Console.WriteLine(ex.Message);
+                linea += lineas[(posicionActual * campos.Count) + campoActual + 1].PadRight(longitudes[campoActual]) + " ";
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine("Error al mostrar la tabla: " + ex.Message);
-            }
-            finally
-            {
-                sr?.Close();
-            }
+
+            Console.WriteLine(linea);
+            Console.WriteLine();
+            Console.WriteLine("Usa las flechas para navegar. Presione ESC para salir.");
         }
     }
 }
